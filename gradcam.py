@@ -1,3 +1,5 @@
+import importlib
+import json
 from os.path import join
 
 from matplotlib import pyplot as plt
@@ -8,25 +10,30 @@ import tensorflow as tf
 from tensorflow.contrib.keras import models as km
 
 
-def convert_keras_model(config, model_path, keras_model=None):
+def convert_keras_model(model_class, loader_method, model_path, model_inputs):
     """
     Convert keras model to something similar to a yatima model.
-    :param keras_model:
-    :param image:
-    :return:
+    :param model_class (str): The name of a class ot function loader to import
+    :param loader_method (str): The method within  the class model_class to load. If the loader is directly a function use model_class and leave this to None
+    :param model_path (str): The address where the weights are stored
+    :param model_inputs (str): The inputs of the model loader to be able to create the model.
+    :return: A dictionary with the model, input and output
     """
-    if not keras_model:
-        define = yd([])
-        networkbuilder = getattr(define, config['network'])
+    point = model_class.rfind('.')
+    package = model_class[:point]
+    name = model_class[point+1:]
+    if loader_method is None:
+        module = importlib.import_module(package)
+        networkbuilder = getattr(module, name)
+    else:
+        module = importlib.import_module(package)
+        class_model = getattr(module, name)
+        networkbuilder = getattr(class_model(), loader_method)
 
-        num_classes = config['num_classes']
-        image_size = config['dims']
-        net = networkbuilder(image_size, num_classes)
+    keras_model = networkbuilder(*model_inputs)
+    keras_model.load_weights(model_path)
 
-        keras_model = net['model']
-        keras_model.load_weights(join(model_path, 'model'))
-
-        keras_model.compile('adam', loss='categorical_crossentropy')
+    keras_model.compile('adam', loss='categorical_crossentropy')
 
     model = {}
 
@@ -275,36 +282,33 @@ class GradCam(object):
             self.sess.close()
         return outputs
 
+'''def process(image, dim, mean, std):
+    im = (image.astype(float) - mean) / std
+    im = resize(im, (dim[0], dim[1]))
+    im = im[np.newaxis, ...]
+    return im'''
 
 def main(args):
-    config = ytt.read_config(join(args.model_path, 'deploy.cfg'))
-    if config.get('global_params', None) != None:
-        configs = []
-        for key, value in config.items():
-            if 'global_param' not in key:
-                value['name'] = key
-                configs.append(value)
-        config = configs[0]
-    else:
-        config['name'] = ''
 
-    mean_pixel = config['mean_pixel']
-    std_pixel = config['std_pixel']
-    image_size = config['dims']
+    with open(args.model_args_path, 'r') as f:
+        values = json.load(f)
 
-    model, sess = convert_keras_model(config, join(args.model_path, config['name']))
+    model, sess = convert_keras_model(values['model_class'], values['loader_method'], values['weight_path'], values['model_inputs'])
 
-    img = process(imread(args.image_path), image_size, mean_pixel, std_pixel)
+    point = values['process'].rfind('.')
+    package = values['process'][:point]
+    name = values['process'][point + 1:]
 
-    name_save = args.image_path[:args.image_path.rfind('.')]
+    module = importlib.import_module(package)
+    process = getattr(module, name)
+
+    img = process(*values['process_inputs']) #process(imread(args.image_path), image_size, mean_pixel, std_pixel)
 
     visualiser = GradCam(model, sess, layer_name=args.layer_name, no_pooling=args.no_pooling,
                          guided_relu=args.guided_relu)
     visualiser.last_layer = args.last_layer
     visualiser.select_output = args.select_output
-
-    if args.save_image:
-        visualiser.save_path = name_save
+    visualiser.save_path = args.save_image
 
     img2 = img.astype(float)
     img2 /= img2.max()
@@ -317,8 +321,11 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-image_path", type=str)
-    parser.add_argument('-model_path', type=str)
+    parser.add_argument("-model_args_path", type=str)
+    #parser.add_argument('-model_path', type=str)
+    #parser.add_argument('-loader_name', type=str, default=None)
+    #parser.add_argument('-model_inputs', type=str, nargs='*')
+    #parser.add_argument('-weight_path', type=str)
     parser.add_argument("-layer_name", type=str, default="",
                         help="Name of the layer to visualise. By default the last one, use the input layer when --guided-relu to get the results of the paper")
     parser.add_argument("-select_output", type=int, default=None,
@@ -328,16 +335,14 @@ if __name__ == '__main__':
                         help="Average the gradient per layer. This is default as explained in the paper")
     parser.add_argument("--guided_relu", action="store_true", default=False,
                         help="Use guided ReLu instead of standard ReLu. Change the layer_name to the input layer to get results from the paper")
-    parser.add_argument("--save_image", action="store_true", default=False,
+    parser.add_argument("-save_image", type=str, default="",
                         help="Save the grad cam images in the same folder where the image is under the same name with negative and positive features")
 
-    args = parser.parse_args(['-image_path','/home/isaac/containers/Data/Car_colors/testing/fine-tuning-nouse/cognac/cognac_00004.jpg',
+    args = parser.parse_args(['-model_args_path','/home/isaac/containers/GradCAM-keras/input_parameters.json',
                              '-select_output',0,
                              '-layer_name','input_1',
                              '-last_layer', 'out',
-                             '--guided_relu',
-                             '--no_pooling',
-                             '-model_path','/home/isaac/containers/ai-porsche-colour/src/model'])
+                             '--guided_relu'])
 
     main(args)
 
