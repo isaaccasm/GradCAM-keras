@@ -142,6 +142,12 @@ class GradCam(object):
         return cam3
 
     def compute_cam(self, layer_visualise, grads, feed):
+        """
+        Compute the equation of CAM from the paper.
+        :param layer_visualise: The visualisation of the layer
+        :param grads:
+        :param feed:
+        """
         output, grads_val = self.sess.run([layer_visualise, grads], feed_dict=feed)
         output = output[0]
         grads_val = grads_val[0]
@@ -227,9 +233,6 @@ class GradCam(object):
         """
 
         if self.keras:
-            # init_op = tf.global_variables_initializer()
-            # self.sess = tf.Session()
-            # self.sess.run(init_op)
             with self.sess.as_default():
                 input_layers = [self.model[layer] for layer in self.model if layer.lower().find('input') > -1]
                 feed = {layer: data for layer, data in zip(input_layers, inputs)}
@@ -240,10 +243,7 @@ class GradCam(object):
 
             grad_cam = self.grad_cam_keras
         else:
-
             with self.sess.as_default():
-                # operations = self.sess.graph.get_operations()
-
                 feed = {layer: data for layer, data in zip(self.model['Inputs'], inputs)}
 
                 prob = np.squeeze(self.sess.run(self.model['y_conv'], feed_dict=feed))
@@ -292,10 +292,7 @@ def main(args):
     std_pixel = config['std_pixel']
     image_size = config['dims']
 
-    if args.not_yatima_model:
-        model, sess = convert_keras_model(config, join(args.model_path, config['name']))
-    else:
-        model, sess = read_yatima_model(config, join(args.model_path, config['name']))
+    model, sess = convert_keras_model(config, join(args.model_path, config['name']))
 
     img = process(imread(args.image_path), image_size, mean_pixel, std_pixel)
 
@@ -316,5 +313,31 @@ def main(args):
     _ = visualiser.run([img])
 
 
+if __name__ == '__main__':
+    import argparse
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-image_path", type=str)
+    parser.add_argument('-model_path', type=str)
+    parser.add_argument("-layer_name", type=str, default="",
+                        help="Name of the layer to visualise. By default the last one, use the input layer when --guided-relu to get the results of the paper")
+    parser.add_argument("-select_output", type=int, default=None,
+                        help="If the output of the model has more than value (a list of results) select the output")
+    parser.add_argument("-last_layer", type=str, default="")
+    parser.add_argument("--no_pooling", action="store_true", default=False,
+                        help="Average the gradient per layer. This is default as explained in the paper")
+    parser.add_argument("--guided_relu", action="store_true", default=False,
+                        help="Use guided ReLu instead of standard ReLu. Change the layer_name to the input layer to get results from the paper")
+    parser.add_argument("--save_image", action="store_true", default=False,
+                        help="Save the grad cam images in the same folder where the image is under the same name with negative and positive features")
+
+    args = parser.parse_args(['-image_path','/home/isaac/containers/Data/Car_colors/testing/fine-tuning-nouse/cognac/cognac_00004.jpg',
+                             '-select_output',0,
+                             '-layer_name','input_1',
+                             '-last_layer', 'out',
+                             '--guided_relu',
+                             '--no_pooling',
+                             '-model_path','/home/isaac/containers/ai-porsche-colour/src/model'])
+
+    main(args)
 
