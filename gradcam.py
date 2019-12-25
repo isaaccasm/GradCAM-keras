@@ -103,11 +103,9 @@ class GradCam(object):
                 i = i - 1
                 last_layer = self.model['Model'].layers[i]
 
-        penultime = i - 1
+        #return [self.grad_cam(list(feed.values())[0], predicted_class, last_layer)]
 
         weights_last_layer = last_layer.weights[0]
-        weights_selected_class = tf.slice(weights_last_layer, [0, predicted_class], [weights_last_layer.shape[0], 1])
-
         if len(last_layer.weights) > 1:  # bias exists
             bias_last_layer = last_layer.weights[1]
             bias_selected_class = tf.slice(bias_last_layer, [predicted_class], [1])
@@ -115,15 +113,16 @@ class GradCam(object):
             bias_selected_class = 0
 
         if self.separate_negative_positive:
-            weights_positive = tf.clip_by_value(weights_selected_class, 0, 1e6)
-            signals = [tf.multiply(weights_positive, layers[penultime].output)]
+            weights_positive = tf.clip_by_value(weights_last_layer, 0, 1e6)
+            signals = [tf.einsum("ij,ja-> ia",layers[i].input, weights_positive)[:,predicted_class]]
 
-            weights_negative = -tf.clip_by_value(weights_selected_class, -1e6, 0)
-            signals.append(tf.multiply(weights_negative, layers[penultime].output))
+            weights_negative = -tf.clip_by_value(weights_last_layer, -1e6, 0)
+            signals.append(tf.einsum("ij,ja-> ia",layers[i].input, weights_negative)[:,predicted_class])
         else:
-            signals = [tf.multiply(weights_selected_class, layers[penultime].output)]
+            signals = [tf.einsum("ij,ja-> ia",layers[i].input, weights_last_layer)[:,predicted_class]] #[tf.matmul(layers[i].input, weights_selected_class)]
+            signals.append(layers[i].output[:,predicted_class])
 
-        losses = [tf.reduce_sum(signal) + bias_selected_class for signal in signals]
+        losses = [signal + bias_selected_class for signal in signals]
 
         # Now it is time for the gradients. Notice, that the gradients of the output for a single layer before softmax
         # correspond to the weights of the layer.
@@ -140,7 +139,7 @@ class GradCam(object):
         for loss in losses:
             grads = tf.gradients(loss, layer_visualise)[0]
             # Normalizing the gradients
-            norm_grads = tf.div(grads, tf.sqrt(tf.reduce_mean(tf.square(grads))) + tf.constant(1e-5))
+            norm_grads = grads #tf.div(grads, tf.sqrt(tf.reduce_mean(tf.square(grads))) + tf.constant(1e-5))
 
             cam = self.compute_cam(layer_visualise, norm_grads, feed)
 
@@ -159,36 +158,50 @@ class GradCam(object):
         output = output[0]
         grads_val = grads_val[0]
 
+        if self.guided_relu:
+            grads_val = np.maximum(grads_val, 0)
+
         if self.no_pooling:
             weights = np.squeeze(grads_val)
-            weights = weights / np.min(weights, axis=2)[:, :, np.newaxis]
-            weights /= np.sqrt(np.mean(weights ** 2, axis=2))[:, :, np.newaxis]
         else:
-            grads_val /= np.min(grads_val)  # TO AVOID that the square of grad_vals is 0.
-            grads_val /= np.sqrt(np.mean(grads_val ** 2))
             weights = np.mean(grads_val, axis=tuple(range(len(grads_val.shape) - 1)))  # [512]
-        cam = np.zeros(output.shape[0: 2], dtype=np.float32)  # [7,7]
-
-        # If there is nan means that the gradients were 0 and therefore the weights should 0
-        weights[np.isnan(weights)] = 0
-
-        # Passing through ReLU
-        output = np.maximum(output, 0)
-
-        if self.guided_relu:
-            weights = np.maximum(weights, 0)
 
         # Taking a weighted average
         if self.no_pooling:
-            for i in range(weights.shape[2]):
-                cam += weights[:, :, i] * output[:, :, i]
+            cam = np.sum(weights * output, axis=2)
         else:
-            for i, w in enumerate(weights):
-                cam += w * output[:, :, i]
+            cam = np.dot(output, weights)
 
-        if np.max(cam) > 0:
-            cam = cam / (np.max(cam) + 1e-12)
+        cam = resize(cam, self.img.shape[0:2])
+        cam = np.maximum(cam, 0)
+        cam_max = np.max(cam)
+        if cam_max > 0:
+            cam = cam / cam_max
 
+        return cam
+
+    def grad_cam(self, image, cls, layer_name):
+        """GradCAM method for visualizing input saliency."""
+        from tensorflow.python.keras import backend as K
+        y_c = layer_name.output[0, cls]
+        conv_output = self.model['Model'].get_layer(self.layer_name).output
+        grads = K.gradients(y_c, conv_output)[0]
+        # Normalize if necessary
+        # grads = normalize(grads)
+        gradient_function = K.function([self.model['Model'].input], [conv_output, grads])
+
+        output, grads_val = gradient_function([image])
+        output, grads_val = output[0, ...], grads_val[0, ...]
+
+        weights = np.mean(grads_val, axis=(0, 1))
+        cam = np.dot(output, weights)
+
+        # Process CAM
+        cam = resize(cam, self.img.shape[0:2])
+        cam = np.maximum(cam, 0)
+        cam_max = cam.max()
+        if cam_max != 0:
+            cam = cam / cam_max
         return cam
 
     def visualise_cams(self, cams):
@@ -294,6 +307,7 @@ def main(args):
         values = json.load(f)
 
     model, sess = convert_keras_model(values['model_class'], values['loader_method'], values['weight_path'], values['model_inputs'])
+    print(model['Model'].summary())
 
     point = values['process'].rfind('.')
     package = values['process'][:point]
@@ -309,6 +323,7 @@ def main(args):
     visualiser.last_layer = args.last_layer
     visualiser.select_output = args.select_output
     visualiser.save_path = args.save_image
+    visualiser.separate_negative_positive = True
 
     img2 = img.astype(float)
     img2 /= img2.max()
@@ -340,9 +355,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args(['-model_args_path','/home/isaac/containers/GradCAM-keras/input_parameters.json',
                              '-select_output',0,
-                             '-layer_name','input_1',
-                             '-last_layer', 'out',
-                             '--guided_relu'])
+                             '-layer_name','conv2d',
+                             '-last_layer', 'out'])
+    #input_1, conv2d
 
     main(args)
 
