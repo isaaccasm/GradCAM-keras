@@ -1,0 +1,5 @@
+#Removed environments
+.venv/
+
+#Removed IDE
+.idea/
