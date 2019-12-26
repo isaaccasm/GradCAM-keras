@@ -78,6 +78,8 @@ class GradCam(object):
     def grad_cam_keras(self, feed, predicted_class):
         """
         This computes the standard grad_cam or a new version where the positive and negative features can be visualised.
+        It is optimised for Keras, however, it calls the method compute_cam that is independent of Keras, so that in future
+        other APIs or directly tf may be used.
         Grad cam algorithm:  https://arxiv.org/pdf/1610.02391.pdf
         The new version just separate the last layer with the features that add positive contribution to the probabilities
         and those that add negative values.
@@ -102,8 +104,6 @@ class GradCam(object):
             while len(last_layer.weights) == 0:
                 i = i - 1
                 last_layer = self.model['Model'].layers[i]
-
-        return [self.grad_cam(list(feed.values())[0], predicted_class, last_layer)]
 
         weights_last_layer = last_layer.weights[0]
         if len(last_layer.weights) > 1:  # bias exists
@@ -152,6 +152,8 @@ class GradCam(object):
         :param grads:
         :param feed:
         """
+        #Use sess.run instead of K.function to make independet of Keras
+        #gradient_function = K.function([self.model['Model'].input], [conv_output, grads])
         output, grads_val = self.sess.run([layer_visualise, grads], feed_dict=feed)
         output = output[0]
         grads_val = grads_val[0]
@@ -176,30 +178,6 @@ class GradCam(object):
         if cam_max > 0:
             cam = cam / cam_max
 
-        return cam
-
-    def grad_cam(self, image, cls, layer_name):
-        """GradCAM method for visualizing input saliency."""
-        from tensorflow.python.keras import backend as K
-        y_c = layer_name.output[0, cls]
-        conv_output = self.model['Model'].get_layer(self.layer_name).output
-        grads = K.gradients(y_c, conv_output)[0]
-        # Normalize if necessary
-        # grads = normalize(grads)
-        gradient_function = K.function([self.model['Model'].input], [conv_output, grads])
-
-        output, grads_val = gradient_function([image])
-        output, grads_val = output[0, ...], grads_val[0, ...]
-
-        weights = np.mean(grads_val, axis=(0, 1))
-        cam = np.dot(output, weights)
-
-        # Process CAM
-        cam = resize(cam, self.img.shape[0:2])
-        cam = np.maximum(cam, 0)
-        cam_max = cam.max()
-        if cam_max != 0:
-            cam = cam / cam_max
         return cam
 
     def visualise_cams(self, cams):
@@ -261,6 +239,7 @@ class GradCam(object):
 
             grad_cam = self.grad_cam_keras
         else:
+            #TODO: This is for a possible extension with other tf API like tfSlim or directly tf.
             with self.sess.as_default():
                 feed = {layer: data for layer, data in zip(self.model['Inputs'], inputs)}
 
@@ -316,7 +295,7 @@ def main(args):
     visualiser.last_layer = args.last_layer
     visualiser.select_output = args.select_output
     visualiser.save_path = args.save_image
-    visualiser.separate_negative_positive = True
+    visualiser.separate_negative_positive = args.separate_negative_positive
 
     img2 = img.astype(float)
     img2 /= img2.max()
@@ -330,15 +309,14 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-model_args_path", type=str)
-    #parser.add_argument('-model_path', type=str)
-    #parser.add_argument('-loader_name', type=str, default=None)
-    #parser.add_argument('-model_inputs', type=str, nargs='*')
-    #parser.add_argument('-weight_path', type=str)
     parser.add_argument("-layer_name", type=str, default="",
                         help="Name of the layer to visualise. By default the last one, use the input layer when --guided-relu to get the results of the paper")
     parser.add_argument("-select_output", type=int, default=None,
                         help="If the output of the model has more than value (a list of results) select the output")
     parser.add_argument("-last_layer", type=str, default="")
+    parser.add_argument("--separate_negative_positive", action="store_true", default=False,
+                        help="""When True it separates the grad Cam into positive and negative meaning that there will be two images, 
+                        indicating the regions considered as important for the class and regions indicating they are not part of the class.""")
     parser.add_argument("--no_pooling", action="store_true", default=False,
                         help="Average the gradient per layer. This is default as explained in the paper")
     parser.add_argument("--guided_relu", action="store_true", default=False,
