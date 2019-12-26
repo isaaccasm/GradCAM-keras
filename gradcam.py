@@ -120,7 +120,6 @@ class GradCam(object):
             signals.append(tf.einsum("ij,ja-> ia",layers[i].input, weights_negative)[:,predicted_class])
         else:
             signals = [tf.einsum("ij,ja-> ia",layers[i].input, weights_last_layer)[:,predicted_class]] #[tf.matmul(layers[i].input, weights_selected_class)]
-            signals.append(layers[i].output[:,predicted_class])
 
         losses = [signal + bias_selected_class for signal in signals]
 
