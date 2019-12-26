@@ -103,7 +103,7 @@ class GradCam(object):
                 i = i - 1
                 last_layer = self.model['Model'].layers[i]
 
-        #return [self.grad_cam(list(feed.values())[0], predicted_class, last_layer)]
+        return [self.grad_cam(list(feed.values())[0], predicted_class, last_layer)]
 
         weights_last_layer = last_layer.weights[0]
         if len(last_layer.weights) > 1:  # bias exists
@@ -140,9 +140,7 @@ class GradCam(object):
             grads = tf.gradients(loss, layer_visualise)[0]
             # Normalizing the gradients
             norm_grads = grads #tf.div(grads, tf.sqrt(tf.reduce_mean(tf.square(grads))) + tf.constant(1e-5))
-
             cam = self.compute_cam(layer_visualise, norm_grads, feed)
-
             cam3.append(cam)
 
         return cam3
@@ -173,7 +171,7 @@ class GradCam(object):
             cam = np.dot(output, weights)
 
         cam = resize(cam, self.img.shape[0:2])
-        cam = np.maximum(cam, 0)
+        cam = np.maximum(cam, 0) #ReLU
         cam_max = np.max(cam)
         if cam_max > 0:
             cam = cam / cam_max
@@ -295,11 +293,6 @@ class GradCam(object):
             self.sess.close()
         return outputs
 
-'''def process(image, dim, mean, std):
-    im = (image.astype(float) - mean) / std
-    im = resize(im, (dim[0], dim[1]))
-    im = im[np.newaxis, ...]
-    return im'''
 
 def main(args):
 
