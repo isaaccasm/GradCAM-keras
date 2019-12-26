@@ -67,6 +67,7 @@ class GradCam(object):
         self.select_output = select_output
         self.last_layer = ''
         self.guided_relu = guided_relu
+        self.guided = False
         self.keras = False
 
         self.not_closed = False
@@ -134,12 +135,20 @@ class GradCam(object):
                 layer_visualise = layers[i].output
                 break
 
+        layer_input = self.model['Model'].input
+
         cam3 = []
         for loss in losses:
             grads = tf.gradients(loss, layer_visualise)[0]
             # Normalizing the gradients
             norm_grads = grads #tf.div(grads, tf.sqrt(tf.reduce_mean(tf.square(grads))) + tf.constant(1e-5))
             cam = self.compute_cam(layer_visualise, norm_grads, feed)
+
+            if self.guided:
+                grads = tf.gradients(layer_visualise, layer_input)[0]
+                guided_grad = self.sess.run(grads, feed_dict=feed)
+                cam *= guided_grad[0, :, :, 0]
+
             cam3.append(cam)
 
         return cam3
@@ -193,10 +202,11 @@ class GradCam(object):
             pooling = 'no pooling'
         for i in range(len(cams) + 1):
             if i > 0:
-                cam = resize(cams[i - 1], self.img.shape[0:2])
+                cam = cams[i - 1] #resize(cams[i - 1], self.img.shape[0:2])
 
             plt.figure()
-            plt.imshow(np.squeeze(self.img))
+            im_rescaled = np.round(255 * ((self.img - np.min(self.img)) / (np.max(self.img) - np.min(self.img))))
+            plt.imshow(np.squeeze(im_rescaled.astype(np.uint8)))
             if i > 0:
                 plt.imshow(cam, cmap='jet', alpha=0.5)
             plt.tick_params(
@@ -289,12 +299,12 @@ def main(args):
 
     img = process(*values['process_inputs']) #process(imread(args.image_path), image_size, mean_pixel, std_pixel)
 
-    visualiser = GradCam(model, sess, layer_name=args.layer_name, no_pooling=args.no_pooling,
-                         guided_relu=args.guided_relu)
+    visualiser = GradCam(model, sess, layer_name=args.layer_name, no_pooling=args.no_pooling)
     visualiser.last_layer = args.last_layer
     visualiser.select_output = args.select_output
     visualiser.save_path = args.save_image
     visualiser.separate_negative_positive = args.separate_negative_positive
+    visualiser.guided = args.guided
 
     img2 = img.astype(float)
     img2 /= img2.max()
@@ -318,13 +328,14 @@ if __name__ == '__main__':
                         indicating the regions considered as important for the class and regions indicating they are not part of the class.""")
     parser.add_argument("--no_pooling", action="store_true", default=False,
                         help="Average the gradient per layer. This is default as explained in the paper")
-    parser.add_argument("--guided_relu", action="store_true", default=False,
-                        help="Use guided ReLu instead of standard ReLu. Change the layer_name to the input layer to get results from the paper")
+    parser.add_argument("--guided", action="store_true", default=False,
+                        help="Get the guided grad")
     parser.add_argument("-save_image", type=str, default="",
                         help="Save the grad cam images in the same folder where the image is under the same name with negative and positive features")
 
     args = parser.parse_args(['-model_args_path','/home/isaac/containers/GradCAM-keras/input_parameters.json',
                              '-select_output',0,
+                              '--guided',
                              '-layer_name','conv2d',
                              '-last_layer', 'out'])
     #input_1, conv2d
