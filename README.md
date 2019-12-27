@@ -7,14 +7,12 @@ It includes a new addition that is a separation between the positive and negativ
 The code is created to be called using command line. The help option can be used by calling:
 `python gradcam.py -help`
 
-##Bash call
-A typical call is:
-```
-python gradcam.py -model_args_path /path/to/file.json --guided -layer_name conv2d -last_layer out
-```
+## Bash call
 
-Command line
-Call: python heatmap.py [OPTIONS]
+Call: 
+```
+python heatmap.py [OPTIONS]
+```
 
 Available options:
 
@@ -28,8 +26,12 @@ Available options:
 - --separate_negative_positive (optional) -> IMPROVEMENT ON THE PAPER. Separate the visualisation between positive and negative. Two images will be shown with the regions that make the model select one class and the parts that make the image not to believe that is that class.
 - --guided: This is the guided backprop explained in the paper.
 
+A typical call is:
+```
+python gradcam.py -model_args_path /path/to/file.json --guided -layer_name conv2d -last_layer out
+```
 
-##Standard input files
+## Standard input files
 Example of a config file (file used in `-model_args_path`):
 ```
 {
