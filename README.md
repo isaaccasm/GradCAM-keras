@@ -25,7 +25,7 @@ Available options:
 - -layer_name (optional, default: last conv layer)-> followed by the name of the layer where the gradients will be computed for visualisation.
 - -model_args_path -> Only useful when the model is not a yatima one, otherwise a config file should be expected in the folder given by image path.
 - --no_pooling (optional) -> Do not average the gradient per layer. This is a variant from the method explained in the paper, where the pooling of the gradients is not applied.
-- --separate_negative_positive (optional) -> IMPROVEMENT OVER THE PAPER. Separate the visualisation between positive and negative. Two images will be shown with the regions that make the model select one class and the parts that make the image not to believe that is that class.
+- --separate_negative_positive (optional) -> IMPROVEMENT ON THE PAPER. Separate the visualisation between positive and negative. Two images will be shown with the regions that make the model select one class and the parts that make the image not to believe that is that class.
 - --guided: This is the guided backprop explained in the paper.
 
 
