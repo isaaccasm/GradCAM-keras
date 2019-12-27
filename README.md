@@ -43,6 +43,12 @@ Example of a config file (file used in `-model_args_path`):
   "process_inputs": ["/path/to/image/to/test", [128,128,3], 127.5, 127.5]
 }
 ```
+- model_class: The path to import the model class. If the loader is a funtion, use this name anyway.
+- loader_method: The name of the loader within the model_class. If model_class was a function, do not use this variable.
+- weight_path: Path to the keras model. If the keras model is model, the code call: `model.load_weight(weight_path)`
+- model_inputs: The inputs of the loader_method (or model_class when a function)
+- process: A function that normalise the image to be used for the model.
+- process_inputs: The input of the model. This must include the image to test
 
 The process input may be different and it does not have any standardize format.
 
