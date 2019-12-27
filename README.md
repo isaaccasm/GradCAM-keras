@@ -42,4 +42,7 @@ Example of a config file (file used in `-model_args_path`):
 }
 ```
 
-The process input may be different and it does not have any standard.
+The process input may be different and it does not have any standardize format.
+
+### Examples
+![](cat.bmp)
