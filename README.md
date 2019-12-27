@@ -35,8 +35,8 @@ python gradcam.py -model_args_path /path/to/file.json --guided -layer_name conv2
 Example of a config file (file used in `-model_args_path`):
 ```
 {
-  "model_class": "models.model_car_color",
-  "loader_method": "car_color_detector",
+  "model_class": "models.model_cat",
+  "loader_method": "load",
   "weight_path": "path/to/keras/weights/file",
   "model_inputs": [[128,128,3], 3],
   "process": "models.process",
