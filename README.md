@@ -13,6 +13,22 @@ A typical call is:
 python gradcam.py -model_args_path /path/to/file.json --guided -layer_name conv2d -last_layer out
 ```
 
+Command line
+Call: python heatmap.py [OPTIONS]
+
+Available options:
+
+- -model_args_path (mandatory) -> A path with a config file that has all the information about the model and the image to analyse.
+- -select_output (optional): None or an integer when there are more than one output in the model and one must be selected.
+- -last_layer (optional): Empty by default. This can be used in the case that the last layer in the model is not the last layer that must be used.
+                        This is not very common but if several heads are used to get the same results and then combined, this may be useful
+- -layer_name (optional, default: last conv layer)-> followed by the name of the layer where the gradients will be computed for visualisation.
+- -model_args_path -> Only useful when the model is not a yatima one, otherwise a config file should be expected in the folder given by image path.
+- --no_pooling (optional) -> Do not average the gradient per layer. This is a variant from the method explained in the paper, where the .
+- --separate_negative_positive (optional) -> Separate the visualisation between positive and negative. Two images will be shown with the regions that make the model select one class and the parts that make the image not to believe that is that class.
+- --guided: This is the guided backprop explained in the paper.
+
+
 ##Standard input files
 Example of a config file (file used in `-model_args_path`):
 ```
@@ -26,5 +42,3 @@ Example of a config file (file used in `-model_args_path`):
 }
 ```
 The process input may be different and it does not have any standard.
-
-

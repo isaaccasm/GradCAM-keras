@@ -169,15 +169,12 @@ class GradCam(object):
         if self.guided_relu:
             grads_val = np.maximum(grads_val, 0)
 
-        if self.no_pooling:
-            weights = np.squeeze(grads_val)
-        else:
-            weights = np.mean(grads_val, axis=tuple(range(len(grads_val.shape) - 1)))  # [512]
-
         # Taking a weighted average
         if self.no_pooling:
+            weights = np.squeeze(grads_val)
             cam = np.sum(weights * output, axis=2)
         else:
+            weights = np.mean(grads_val, axis=tuple(range(len(grads_val.shape) - 1)))  # [512]
             cam = np.dot(output, weights)
 
         cam = resize(cam, self.img.shape[0:2])
@@ -270,7 +267,7 @@ class GradCam(object):
             self.predicted_class = class_position
 
         if not isinstance(self.predicted_class, (int, np.int_, np.ushort)):
-            raise ValueError('Predicted class value must be an integer')
+            raise ValueError('Predicted class value must be an integer. Value: {}'.format(self.predicted_class))
 
         outputs = grad_cam(feed, self.predicted_class)
 
@@ -333,11 +330,7 @@ if __name__ == '__main__':
     parser.add_argument("-save_image", type=str, default="",
                         help="Save the grad cam images in the same folder where the image is under the same name with negative and positive features")
 
-    args = parser.parse_args(['-model_args_path','/home/isaac/containers/GradCAM-keras/input_parameters.json',
-                             '-select_output',0,
-                              '--guided',
-                             '-layer_name','conv2d',
-                             '-last_layer', 'out'])
+    args = parser.parse_args()
     #input_1, conv2d
 
     main(args)
