@@ -41,4 +41,5 @@ Example of a config file (file used in `-model_args_path`):
   "process_inputs": ["/path/to/image/to/test", [128,128,3], 127.5, 127.5]
 }
 ```
+
 The process input may be different and it does not have any standard.
